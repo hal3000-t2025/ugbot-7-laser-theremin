@@ -21,8 +21,7 @@ float HandMapper::pitchFromDistanceMm(
       (clamped - static_cast<float>(near_mm)) / static_cast<float>(far_mm - near_mm);
 
   const float frequency_ratio = max_frequency_hz / min_frequency_hz;
-  const float reversed_normalized = 1.0f - normalized;
-  const float shaped_position = powf(reversed_normalized, curve_gamma);
+  const float shaped_position = powf(normalized, curve_gamma);
   return min_frequency_hz * powf(frequency_ratio, shaped_position);
 }
 
@@ -64,6 +63,5 @@ float HandMapper::playbackRateFromDistanceMm(
 
   const float normalized =
       (clamped - static_cast<float>(near_mm)) / static_cast<float>(far_mm - near_mm);
-  const float hand_presence = 1.0f - normalized;
-  return min_rate + hand_presence * (max_rate - min_rate);
+  return min_rate + normalized * (max_rate - min_rate);
 }

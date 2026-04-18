@@ -253,12 +253,14 @@ Audio output default: low volume
 - `warm / hollow / bright` 是 3 组内置 `wavetable` 音色
 - `sample` 是基于 [dream_tides_full_mono10k.wav](/Users/houtao/ai/Mcp_Dev/激光特雷门琴/src/audio/dream_tides_full_mono10k.wav) 嵌入固件的整首采样预设，产品语义固定为“按 `pitch` 连续变速的可演奏采样音色”
 - 当前允许后续频繁替换 `sample` 内容，但默认仍通过重新编译和刷机完成，不考虑 `OTA`
-- `twinkle` 是基于 [scores/twinkle_twinkle.abc](/Users/houtao/ai/Mcp_Dev/激光特雷门琴/scores/twinkle_twinkle.abc) 生成的自动播放预设，当前绑定第 `4` 个音色 `warm`
+- `twinkle` 当前重新绑定为乐谱自动播放预设，ABC 来源仍是 [scores/twinkle_twinkle.abc](/Users/houtao/ai/Mcp_Dev/激光特雷门琴/scores/twinkle_twinkle.abc)
+- 当前曲目已改为《Lonely People Are Shameful / 孤独的人是可耻的》，底层绑定第 `4` 个音色 `warm`
 - 在自动播放预设里，当前控制映射改为：
   - `pitch` 传感器控制播放速度
   - `volume` 传感器继续控制音量
   - 不遮挡 `pitch` 传感器时为默认 `1.00x`
-  - 手靠近 `pitch` 传感器时会逐步加速到 `3.00x`
+  - 手靠近 `pitch` 传感器时保持较慢
+  - 手离远时会逐步加速到 `3.00x`
 - 当前内置 sample 已把素材幅度补偿到接近普通合成音色的量级，靠近 `volume` 传感器时会更容易推到足够高的响度
 - `tools/abc_to_score.py` 可把简化子集 `ABC` 转成 [generated_scores.h](/Users/houtao/ai/Mcp_Dev/激光特雷门琴/src/control/generated_scores.h)
 - `next` 和 `preset <1-8>` 走的是和硬件按钮同一套预设切换逻辑
@@ -267,15 +269,16 @@ Audio output default: low volume
   - 当前不是单纯“线性手势位置 -> 对数频率”
   - 而是“`power/gamma` 弧线手势位置 -> 对数频率”
   - 默认 `curve=0.75`
-  - `curve < 1.0` 会扩展靠近传感器的高音区
-  - `curve > 1.0` 会扩展远端低音区
+  - 当前方向是：离 `pitch` 传感器越近音越低，离远音越高
+  - `curve < 1.0` 会扩展远端高音区
+  - `curve > 1.0` 会扩展靠近传感器的低音区
 - `cal ...` 会进入“保持手势稳定”的采样模式，抓取 8 帧后自动写入平均值
 - 如果希望完全手动控制，也可以继续使用 `set ... <mm>`
 - `stream off` 可临时关闭自动状态刷屏，`stream on` 可恢复
 - `set gate volume` 用来控制“手靠近到多近才开始出声”
 - `set max volume` 用来放大或压低演奏最大音量，并且可通过 `save` 持久化
 - 如果 `status` 里出现 `score=<name> event=<n>/<total> rest=<yes|no> rate=<x.xx>x`，说明当前预设正处于自动播放模式
-- 自动状态刷屏在 `score` 模式下现在会显示真实控制关系：
+- 自动状态刷屏在 `score` 模式下会显示真实控制关系：
   - `pitch_in ... => rate=...`
   - `out=... Hz`
   - `volume_in ... => ...`

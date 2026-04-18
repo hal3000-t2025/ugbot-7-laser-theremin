@@ -60,6 +60,7 @@ CalibrationCaptureState calibration_capture;
 constexpr uint32_t kAudioTaskStackSize = 4096;
 constexpr UBaseType_t kAudioTaskPriority = 2;
 constexpr unsigned long kPresetButtonDebounceMs = 30;
+constexpr float kVolumeReleaseAlpha = 0.65f;
 
 struct PresetSlot {
   const char* name;
@@ -272,6 +273,10 @@ float currentPitchHz() {
     return app_config::kTestToneFrequencyHz;
   }
 
+  if (!pitch_sensor.hasValidReading() && !pitch_distance_smoother.initialized()) {
+    return app_config::kPitchMinFrequencyHz;
+  }
+
   const float smoothed_distance = pitch_distance_smoother.initialized()
                                       ? pitch_distance_smoother.value()
                                       : static_cast<float>(pitch_sensor.lastDistanceMm());
@@ -289,6 +294,10 @@ float currentVolumeLevel() {
     return app_config::kInitialVolume;
   }
 
+  if (!volume_sensor.hasValidReading()) {
+    return 0.0f;
+  }
+
   const float smoothed_distance = volume_distance_smoother.initialized()
                                       ? volume_distance_smoother.value()
                                       : static_cast<float>(volume_sensor.lastDistanceMm());
@@ -303,6 +312,10 @@ float currentVolumeLevel() {
 
 float currentScorePlaybackRate() {
   if (!pitch_sensor.isOnline()) {
+    return app_config::kScorePlaybackRateMin;
+  }
+
+  if (!pitch_sensor.hasValidReading() && !pitch_distance_smoother.initialized()) {
     return app_config::kScorePlaybackRateMin;
   }
 
@@ -1042,16 +1055,38 @@ void loop() {
     bool volume_updated = false;
 
     if (pitch_sensor.isOnline() && pitch_sensor.update()) {
-      pitch_distance_smoother.update(static_cast<float>(pitch_sensor.lastDistanceMm()));
-      if (!diagnostic_tone_enabled && !score_player.isActive()) {
-        audio_engine.setFrequency(currentPitchHz());
+      const uint16_t pitch_distance_mm = pitch_sensor.lastDistanceMm();
+      if (pitch_distance_mm <= calibration_settings.pitch_far_mm) {
+        pitch_distance_smoother.update(static_cast<float>(pitch_distance_mm));
+        if (!diagnostic_tone_enabled && !score_player.isActive()) {
+          audio_engine.setFrequency(currentPitchHz());
+        }
+        pitch_updated = true;
       }
-      pitch_updated = true;
     }
 
-    if (volume_sensor.isOnline() && volume_sensor.update()) {
-      volume_distance_smoother.update(static_cast<float>(volume_sensor.lastDistanceMm()));
-      volume_updated = true;
+    if (volume_sensor.isOnline()) {
+      if (volume_sensor.update()) {
+        const uint16_t volume_distance_mm = volume_sensor.lastDistanceMm();
+        if (volume_distance_mm >= calibration_settings.volume_far_mm) {
+          volume_distance_smoother.reset();
+        } else if (volume_distance_mm >= calibration_settings.volume_near_mm) {
+          const float volume_distance = static_cast<float>(volume_distance_mm);
+          const bool releasing =
+              volume_distance_smoother.initialized() &&
+              volume_distance > volume_distance_smoother.value();
+          if (releasing) {
+            volume_distance_smoother.updateWithAlpha(
+                volume_distance,
+                kVolumeReleaseAlpha);
+          } else {
+            volume_distance_smoother.update(volume_distance);
+          }
+          volume_updated = true;
+        }
+      } else if (!volume_sensor.hasValidReading()) {
+        volume_distance_smoother.reset();
+      }
     }
 
     updateCalibrationCapture(pitch_updated, volume_updated);

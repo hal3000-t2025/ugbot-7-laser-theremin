@@ -5,13 +5,23 @@ class ExponentialSmoother {
   explicit ExponentialSmoother(float alpha) : alpha_(alpha) {}
 
   float update(float input) {
+    return updateWithAlpha(input, alpha_);
+  }
+
+  float updateWithAlpha(float input, float alpha) {
+    if (alpha < 0.0f) {
+      alpha = 0.0f;
+    } else if (alpha > 1.0f) {
+      alpha = 1.0f;
+    }
+
     if (!initialized_) {
       value_ = input;
       initialized_ = true;
       return value_;
     }
 
-    value_ += alpha_ * (input - value_);
+    value_ += alpha * (input - value_);
     return value_;
   }
 

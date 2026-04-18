@@ -12,6 +12,7 @@ class TofSensor {
   bool update();
 
   bool isOnline() const;
+  bool hasValidReading() const;
   uint16_t lastDistanceMm() const;
   bool lastReadTimedOut() const;
   uint8_t address() const;
@@ -23,4 +24,5 @@ class TofSensor {
   uint8_t address_ = 0x29;
   bool online_ = false;
   bool last_timeout_ = false;
+  bool has_valid_reading_ = false;
 };

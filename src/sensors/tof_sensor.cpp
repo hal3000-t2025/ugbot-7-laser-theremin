@@ -2,6 +2,16 @@
 
 #include "app_config.h"
 
+namespace {
+
+bool isUsableRangeStatus(VL53L1X::RangeStatus status) {
+  return status == VL53L1X::RangeValid ||
+         status == VL53L1X::RangeValidMinRangeClipped ||
+         status == VL53L1X::RangeValidNoWrapCheckFail;
+}
+
+}  // namespace
+
 TofSensor::TofSensor(uint8_t xshut_pin) : xshut_pin_(xshut_pin) {}
 
 void TofSensor::powerOff() {
@@ -9,6 +19,7 @@ void TofSensor::powerOff() {
   digitalWrite(xshut_pin_, LOW);
   delay(10);
   online_ = false;
+  has_valid_reading_ = false;
 }
 
 bool TofSensor::begin(TwoWire& wire, uint8_t address) {
@@ -34,11 +45,13 @@ bool TofSensor::begin(TwoWire& wire, uint8_t address) {
   sensor_.startContinuous(app_config::kTofContinuousPeriodMs);
 
   online_ = true;
+  has_valid_reading_ = false;
   return true;
 }
 
 bool TofSensor::update() {
   if (!online_) {
+    has_valid_reading_ = false;
     return false;
   }
 
@@ -46,13 +59,29 @@ bool TofSensor::update() {
     return false;
   }
 
-  last_distance_mm_ = sensor_.read(false);
+  const uint16_t measured_distance_mm = sensor_.read(false);
   last_timeout_ = sensor_.timeoutOccurred();
-  return !last_timeout_;
+  if (last_timeout_) {
+    has_valid_reading_ = false;
+    return false;
+  }
+
+  if (!isUsableRangeStatus(sensor_.ranging_data.range_status) || measured_distance_mm == 0) {
+    has_valid_reading_ = false;
+    return false;
+  }
+
+  last_distance_mm_ = measured_distance_mm;
+  has_valid_reading_ = true;
+  return true;
 }
 
 bool TofSensor::isOnline() const {
   return online_;
+}
+
+bool TofSensor::hasValidReading() const {
+  return has_valid_reading_;
 }
 
 uint16_t TofSensor::lastDistanceMm() const {
