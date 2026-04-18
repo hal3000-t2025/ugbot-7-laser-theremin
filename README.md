@@ -6,7 +6,7 @@
 - 音频：`MAX98357A（已焊接排针） + 3W 扬声器`
 - 传感器：`2 x VL53L1X`
 - 输出：第 1 个传感器控制 `pitch`，第 2 个传感器控制 `volume`
-- 音色：`sine / square / triangle` + `warm / hollow / bright` 内置 wavetable + `sample` 采样预设 + `twinkle` 乐谱自动播放预设
+- 音色：`sine / square / triangle` + `warm / hollow / bright` 内置 wavetable + `sample / sample2` 采样预设 + `twinkle / twinkle2` 乐谱自动播放预设
 - 音高范围：默认 `220Hz - 1760Hz`，共 `3` 个八度
 - 状态：已完成本地编译、烧录与双传感器实测，默认低音量输出，已接入串口校准、NVS 持久化和稳态采样校准
 
@@ -136,8 +136,10 @@ scripts/
   - `5 hollow`
   - `6 bright`
   - `7 sample`
-  - `8 twinkle`
-- 串口 `status` 会同步显示 `preset=<n>/8 name=<preset>`
+  - `8 sample2`
+  - `9 twinkle`
+  - `10 twinkle2`
+- 串口 `status` 会同步显示 `preset=<n>/10 name=<preset>`
 
 ## 编译
 
@@ -219,9 +221,11 @@ Audio output default: low volume
 - `hollow`
 - `bright`
 - `sample`
+- `sample2`
 - `twinkle`
+- `twinkle2`
 - `next`
-- `preset <1-8>`
+- `preset <1-10>`
 - `mute`
 - `unmute`
 - `status`
@@ -263,7 +267,7 @@ Audio output default: low volume
   - 手离远时会逐步加速到 `3.00x`
 - 当前内置 sample 已把素材幅度补偿到接近普通合成音色的量级，靠近 `volume` 传感器时会更容易推到足够高的响度
 - `tools/abc_to_score.py` 可把简化子集 `ABC` 转成 [generated_scores.h](/Users/houtao/ai/Mcp_Dev/激光特雷门琴/src/control/generated_scores.h)
-- `next` 和 `preset <1-8>` 走的是和硬件按钮同一套预设切换逻辑
+- `next` 和 `preset <1-10>` 走的是和硬件按钮同一套预设切换逻辑
 - 当前默认音高跨度已经从 `2` 个八度扩到 `3` 个八度：`220Hz - 1760Hz`
 - `pitch` 映射现在已进入第一版弧线化：
   - 当前不是单纯“线性手势位置 -> 对数频率”
@@ -291,7 +295,7 @@ Audio output default: low volume
 4. 默认会以较低音量输出
 5. 改变 pitch 传感器距离时，喇叭音高应明显变化
 6. 改变 volume 传感器距离时，音量应明显变化
-7. 串口输入 `sine` / `square` / `triangle` / `warm` / `hollow` / `bright` / `sample` / `twinkle` 应能切换音色或自动播放预设
+7. 串口输入 `sine` / `square` / `triangle` / `warm` / `hollow` / `bright` / `sample` / `sample2` / `twinkle` / `twinkle2` 应能切换音色或自动播放预设
 8. 串口输入 `cal pitch near` 或 `cal volume far` 时，应提示保持手势稳定并在 8 帧后输出平均采样结果
 9. 串口输入 `status` 应显示当前音色、静音状态、音高和音量；切到 `twinkle` 时还应显示当前乐谱事件进度
 
