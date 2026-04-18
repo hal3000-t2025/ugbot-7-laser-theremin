@@ -4,7 +4,7 @@
 
 namespace generated_scores {
 
-constexpr ScoreEvent kTwinkleEvents[] = {
+constexpr ScoreEvent kExampleEvents[] = {
     {-1, 416},
     {79, 416},
     {-1, 416},
@@ -84,12 +84,12 @@ constexpr ScoreEvent kTwinkleEvents[] = {
     {-1, 1666},
 };
 
-constexpr ScoreDefinition kTwinkleScore = {
-    "twinkle",
+constexpr ScoreDefinition kExampleScore = {
+    "example",
     "Lonely People Are Shameful (Excerpt)",
     Waveform::kWarm,
-    kTwinkleEvents,
-    sizeof(kTwinkleEvents) / sizeof(kTwinkleEvents[0]),
+    kExampleEvents,
+    sizeof(kExampleEvents) / sizeof(kExampleEvents[0]),
     true,
     1.00f,
 };

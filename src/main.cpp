@@ -94,8 +94,8 @@ constexpr PresetSlot kPresetSlots[] = {
     {"bright", Waveform::kBright, nullptr, "Waveform set to bright wavetable."},
     {"sample", Waveform::kSample, nullptr, "Waveform set to embedded sample loop."},
     {"sample2", Waveform::kSample, nullptr, "Waveform set to embedded sample loop."},
-    {"twinkle", Waveform::kWarm, &generated_scores::kTwinkleScore, "Preset set to twinkle score."},
-    {"twinkle2", Waveform::kWarm, &generated_scores::kTwinkleScore, "Preset set to twinkle score."},
+    {"example", Waveform::kWarm, &generated_scores::kExampleScore, "Preset set to example score."},
+    {"example2", Waveform::kWarm, &generated_scores::kExampleScore, "Preset set to example score."},
 };
 
 constexpr size_t kPresetSlotCount = sizeof(kPresetSlots) / sizeof(kPresetSlots[0]);
@@ -516,7 +516,7 @@ void applyAudioOutputState() {
 
 void printSerialCommandHelp() {
   Serial.println("Commands:");
-  Serial.println("  sine | square | triangle | warm | hollow | bright | sample | sample2 | twinkle | twinkle2 | 1..10");
+  Serial.println("  sine | square | triangle | warm | hollow | bright | sample | sample2 | example | example2 | 1..10");
   Serial.println("  next | preset <1-10>");
   Serial.println("  mute | unmute | status | stream on | stream off | help");
   Serial.println("  testtone on | testtone off");
@@ -972,12 +972,12 @@ void handleSerialCommand(const String& input) {
     return;
   }
 
-  if (command == "twinkle" || command == "9") {
+  if (command == "example" || command == "9") {
     applyPresetSelectionCommand(9);
     return;
   }
 
-  if (command == "twinkle2" || command == "10") {
+  if (command == "example2" || command == "10") {
     applyPresetSelectionCommand(10);
     return;
   }

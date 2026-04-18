@@ -30,9 +30,9 @@ project_dir = Path(env.subst("$PROJECT_DIR"))
 
 generate_score(
     project_dir=project_dir,
-    source="scores/twinkle_twinkle.abc",
+    source="scores/example.abc",
     output="src/control/generated_scores.h",
-    score_name="Twinkle",
+    score_name="Example",
     waveform="kWarm",
     loop=True,
 )

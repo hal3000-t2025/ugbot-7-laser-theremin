@@ -6,7 +6,7 @@
 - 音频：`MAX98357A（已焊接排针） + 3W 扬声器`
 - 传感器：`2 x VL53L1X`
 - 输出：第 1 个传感器控制 `pitch`，第 2 个传感器控制 `volume`
-- 音色：`sine / square / triangle` + `warm / hollow / bright` 内置 wavetable + `sample / sample2` 采样预设 + `twinkle / twinkle2` 乐谱自动播放预设
+- 音色：`sine / square / triangle` + `warm / hollow / bright` 内置 wavetable + `sample / sample2` 采样预设 + `example / example2` 乐谱自动播放预设
 - 音高范围：默认 `220Hz - 1760Hz`，共 `3` 个八度
 - 状态：已完成本地编译、烧录与双传感器实测，默认低音量输出，已接入串口校准、NVS 持久化和稳态采样校准
 
@@ -37,7 +37,7 @@ src/
     score_types.h
     smoothing.h
 scores/
-  twinkle_twinkle.abc
+  example.abc
 tools/
   abc_to_score.py
   theremin_tool.py
@@ -137,8 +137,8 @@ scripts/
   - `6 bright`
   - `7 sample`
   - `8 sample2`
-  - `9 twinkle`
-  - `10 twinkle2`
+  - `9 example`
+  - `10 example2`
 - 串口 `status` 会同步显示 `preset=<n>/10 name=<preset>`
 
 ## 编译
@@ -151,7 +151,7 @@ pio run
 说明：
 
 - 每次 `pio run` / `pio upload` 前，都会自动执行 `scripts/generate_scores.py`
-- 当前会把 [scores/twinkle_twinkle.abc](/Users/houtao/ai/Mcp_Dev/激光特雷门琴/scores/twinkle_twinkle.abc) 转成 [generated_scores.h](/Users/houtao/ai/Mcp_Dev/激光特雷门琴/src/control/generated_scores.h)
+- 当前会把 [scores/example.abc](/Users/houtao/ai/Mcp_Dev/激光特雷门琴/scores/example.abc) 转成 [generated_scores.h](/Users/houtao/ai/Mcp_Dev/激光特雷门琴/src/control/generated_scores.h)
 
 ## 烧录
 
@@ -222,8 +222,8 @@ Audio output default: low volume
 - `bright`
 - `sample`
 - `sample2`
-- `twinkle`
-- `twinkle2`
+- `example`
+- `example2`
 - `next`
 - `preset <1-10>`
 - `mute`
@@ -257,7 +257,7 @@ Audio output default: low volume
 - `warm / hollow / bright` 是 3 组内置 `wavetable` 音色
 - `sample` 是基于 [dream_tides_full_mono10k.wav](/Users/houtao/ai/Mcp_Dev/激光特雷门琴/src/audio/dream_tides_full_mono10k.wav) 嵌入固件的整首采样预设，产品语义固定为“按 `pitch` 连续变速的可演奏采样音色”
 - 当前允许后续频繁替换 `sample` 内容，但默认仍通过重新编译和刷机完成，不考虑 `OTA`
-- `twinkle` 当前重新绑定为乐谱自动播放预设，ABC 来源仍是 [scores/twinkle_twinkle.abc](/Users/houtao/ai/Mcp_Dev/激光特雷门琴/scores/twinkle_twinkle.abc)
+- `example` 当前重新绑定为乐谱自动播放预设，ABC 来源仍是 [scores/example.abc](/Users/houtao/ai/Mcp_Dev/激光特雷门琴/scores/example.abc)
 - 当前曲目已改为《Lonely People Are Shameful / 孤独的人是可耻的》，底层绑定第 `4` 个音色 `warm`
 - 在自动播放预设里，当前控制映射改为：
   - `pitch` 传感器控制播放速度
@@ -295,9 +295,9 @@ Audio output default: low volume
 4. 默认会以较低音量输出
 5. 改变 pitch 传感器距离时，喇叭音高应明显变化
 6. 改变 volume 传感器距离时，音量应明显变化
-7. 串口输入 `sine` / `square` / `triangle` / `warm` / `hollow` / `bright` / `sample` / `sample2` / `twinkle` / `twinkle2` 应能切换音色或自动播放预设
+7. 串口输入 `sine` / `square` / `triangle` / `warm` / `hollow` / `bright` / `sample` / `sample2` / `example` / `example2` 应能切换音色或自动播放预设
 8. 串口输入 `cal pitch near` 或 `cal volume far` 时，应提示保持手势稳定并在 8 帧后输出平均采样结果
-9. 串口输入 `status` 应显示当前音色、静音状态、音高和音量；切到 `twinkle` 时还应显示当前乐谱事件进度
+9. 串口输入 `status` 应显示当前音色、静音状态、音高和音量；切到 `example` 时还应显示当前乐谱事件进度
 
 如果无声，先排查：
 

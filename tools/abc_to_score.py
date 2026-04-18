@@ -186,7 +186,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="把最小子集 ABC 转成固件 score header")
     parser.add_argument("input", help="ABC 文件路径")
     parser.add_argument("output", help="输出 header 路径")
-    parser.add_argument("--score-name", default="Twinkle", help="生成的 score 名称，默认 Twinkle")
+    parser.add_argument("--score-name", default="Example", help="生成的 score 名称，默认 Example")
     parser.add_argument("--display-name", default="", help="显示名，默认使用 ABC 第一条标题")
     parser.add_argument("--waveform", default="kSample", help="绑定的波形枚举，默认 kSample")
     parser.add_argument("--loop", action="store_true", help="生成循环播放 score")
