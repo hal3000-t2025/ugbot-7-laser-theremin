@@ -44,6 +44,11 @@ constexpr float kVolumeSilenceGate = 0.10f;
 constexpr float kVolumeResponseExponent = 0.5f;
 constexpr float kScorePlaybackRateMin = 1.0f;
 constexpr float kScorePlaybackRateMax = 3.0f;
+// Score playback keeps phase continuous and glides between target notes.
+constexpr float kScorePitchGlideAlpha = 0.18f;
+constexpr float kScoreVolumeAttackAlpha = 0.28f;
+constexpr float kScoreVolumeReleaseAlpha = 0.36f;
+constexpr float kScoreSmoothingReferenceMs = 10.0f;
 constexpr float kWaveformBlendStep = 0.02f;
 constexpr uint8_t kOledI2cAddress = 0x3C;
 constexpr unsigned long kOledRefreshIntervalMs = 250;
