@@ -4,6 +4,25 @@
 #include <cmath>
 
 #include "app_config.h"
+#include "control/pitch_snapper.h"
+
+float HandMapper::pitchNoteFromDistanceMm(
+    uint16_t distance_mm,
+    uint16_t near_mm,
+    uint16_t far_mm,
+    float curve_gamma,
+    float min_note,
+    float max_note) const {
+  const float clamped = constrain(
+      static_cast<float>(distance_mm),
+      static_cast<float>(near_mm),
+      static_cast<float>(far_mm));
+
+  const float normalized =
+      (clamped - static_cast<float>(near_mm)) / static_cast<float>(far_mm - near_mm);
+  const float shaped_position = powf(normalized, curve_gamma);
+  return min_note + (max_note - min_note) * shaped_position;
+}
 
 float HandMapper::pitchFromDistanceMm(
     uint16_t distance_mm,
@@ -12,17 +31,16 @@ float HandMapper::pitchFromDistanceMm(
     float curve_gamma,
     float min_frequency_hz,
     float max_frequency_hz) const {
-  const float clamped = constrain(
-      static_cast<float>(distance_mm),
-      static_cast<float>(near_mm),
-      static_cast<float>(far_mm));
-
-  const float normalized =
-      (clamped - static_cast<float>(near_mm)) / static_cast<float>(far_mm - near_mm);
-
-  const float frequency_ratio = max_frequency_hz / min_frequency_hz;
-  const float shaped_position = powf(normalized, curve_gamma);
-  return min_frequency_hz * powf(frequency_ratio, shaped_position);
+  const float min_note = PitchSnapper::frequencyToMidiNote(min_frequency_hz);
+  const float max_note = PitchSnapper::frequencyToMidiNote(max_frequency_hz);
+  const float note = pitchNoteFromDistanceMm(
+      distance_mm,
+      near_mm,
+      far_mm,
+      curve_gamma,
+      min_note,
+      max_note);
+  return PitchSnapper::midiNoteToFrequency(note);
 }
 
 float HandMapper::volumeFromDistanceMm(

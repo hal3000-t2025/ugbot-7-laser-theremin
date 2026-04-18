@@ -146,6 +146,7 @@ void AudioEngine::update() {
 
 void AudioEngine::setFrequency(float frequency_hz) {
   taskENTER_CRITICAL(&parameter_lock_);
+  // Keep phase continuity: only the increment changes, phase_ itself is never reset here.
   frequency_hz_ = frequency_hz;
   taskEXIT_CRITICAL(&parameter_lock_);
 }

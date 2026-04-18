@@ -11,6 +11,11 @@ constexpr const char* kKeyVolumeNear = "v_near";
 constexpr const char* kKeyVolumeFar = "v_far";
 constexpr const char* kKeyPitchSmooth = "p_smooth";
 constexpr const char* kKeyPitchCurve = "p_curve";
+constexpr const char* kKeyPitchSnapWidth = "p_snap_w";
+constexpr const char* kKeyPitchSnapStrength = "p_snap_s";
+constexpr const char* kKeyPitchSnapSmooth = "p_snap_sm";
+constexpr const char* kKeyPitchSnapScale = "p_snap_sc";
+constexpr const char* kKeyPitchSnapRoot = "p_snap_rt";
 constexpr const char* kKeyVolumeSmooth = "v_smooth";
 constexpr const char* kKeyVolumeGate = "v_gate";
 constexpr const char* kKeyMaxVolume = "max_vol";
@@ -35,6 +40,15 @@ bool CalibrationStore::load(CalibrationSettings& settings) {
   settings.pitch_smoothing_alpha =
       preferences.getFloat(kKeyPitchSmooth, settings.pitch_smoothing_alpha);
   settings.pitch_curve_gamma = preferences.getFloat(kKeyPitchCurve, settings.pitch_curve_gamma);
+  settings.pitch_snap_width_semitones =
+      preferences.getFloat(kKeyPitchSnapWidth, settings.pitch_snap_width_semitones);
+  settings.pitch_snap_max_strength =
+      preferences.getFloat(kKeyPitchSnapStrength, settings.pitch_snap_max_strength);
+  settings.pitch_snap_smoothing_alpha =
+      preferences.getFloat(kKeyPitchSnapSmooth, settings.pitch_snap_smoothing_alpha);
+  settings.pitch_snap_scale = static_cast<PitchScaleType>(
+      preferences.getUChar(kKeyPitchSnapScale, static_cast<uint8_t>(settings.pitch_snap_scale)));
+  settings.pitch_snap_root = preferences.getUChar(kKeyPitchSnapRoot, settings.pitch_snap_root);
   settings.volume_smoothing_alpha =
       preferences.getFloat(kKeyVolumeSmooth, settings.volume_smoothing_alpha);
   settings.volume_silence_gate =
@@ -61,6 +75,11 @@ bool CalibrationStore::save(const CalibrationSettings& settings) {
   preferences.putUShort(kKeyVolumeFar, sanitized.volume_far_mm);
   preferences.putFloat(kKeyPitchSmooth, sanitized.pitch_smoothing_alpha);
   preferences.putFloat(kKeyPitchCurve, sanitized.pitch_curve_gamma);
+  preferences.putFloat(kKeyPitchSnapWidth, sanitized.pitch_snap_width_semitones);
+  preferences.putFloat(kKeyPitchSnapStrength, sanitized.pitch_snap_max_strength);
+  preferences.putFloat(kKeyPitchSnapSmooth, sanitized.pitch_snap_smoothing_alpha);
+  preferences.putUChar(kKeyPitchSnapScale, static_cast<uint8_t>(sanitized.pitch_snap_scale));
+  preferences.putUChar(kKeyPitchSnapRoot, sanitized.pitch_snap_root);
   preferences.putFloat(kKeyVolumeSmooth, sanitized.volume_smoothing_alpha);
   preferences.putFloat(kKeyVolumeGate, sanitized.volume_silence_gate);
   preferences.putFloat(kKeyMaxVolume, sanitized.max_output_volume);

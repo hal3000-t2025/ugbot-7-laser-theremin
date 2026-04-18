@@ -3,6 +3,7 @@
 #include <stdint.h>
 
 #include "app_config.h"
+#include "control/pitch_snapper.h"
 
 struct CalibrationSettings {
   uint16_t pitch_near_mm = app_config::kPitchNearDistanceMm;
@@ -11,6 +12,11 @@ struct CalibrationSettings {
   uint16_t volume_far_mm = app_config::kVolumeFarDistanceMm;
   float pitch_smoothing_alpha = app_config::kDefaultPitchSmoothingAlpha;
   float pitch_curve_gamma = app_config::kDefaultPitchCurveGamma;
+  float pitch_snap_width_semitones = app_config::kDefaultPitchSnapWidthSemitones;
+  float pitch_snap_max_strength = app_config::kDefaultPitchSnapMaxStrength;
+  float pitch_snap_smoothing_alpha = app_config::kDefaultPitchSnapSmoothingAlpha;
+  PitchScaleType pitch_snap_scale = PitchScaleType::kMajor;
+  uint8_t pitch_snap_root = app_config::kDefaultPitchSnapRoot;
   float volume_smoothing_alpha = app_config::kDefaultVolumeSmoothingAlpha;
   float volume_silence_gate = app_config::kVolumeSilenceGate;
   float max_output_volume = app_config::kMaximumVolume;
@@ -30,6 +36,10 @@ struct CalibrationSettings {
 
     pitch_smoothing_alpha = clampAlpha(pitch_smoothing_alpha);
     pitch_curve_gamma = clampPitchCurveGamma(pitch_curve_gamma);
+    pitch_snap_width_semitones = clampSnapWidth(pitch_snap_width_semitones);
+    pitch_snap_max_strength = clampUnitInterval(pitch_snap_max_strength);
+    pitch_snap_smoothing_alpha = clampAlpha(pitch_snap_smoothing_alpha);
+    pitch_snap_root %= 12;
     volume_smoothing_alpha = clampAlpha(volume_smoothing_alpha);
     volume_silence_gate = clampGate(volume_silence_gate);
     max_output_volume = clampMaxVolume(max_output_volume);
@@ -74,6 +84,26 @@ struct CalibrationSettings {
     }
     if (value > app_config::kPitchCurveGammaMax) {
       return app_config::kPitchCurveGammaMax;
+    }
+    return value;
+  }
+
+  static float clampSnapWidth(float value) {
+    if (value < app_config::kPitchSnapWidthMin) {
+      return app_config::kPitchSnapWidthMin;
+    }
+    if (value > app_config::kPitchSnapWidthMax) {
+      return app_config::kPitchSnapWidthMax;
+    }
+    return value;
+  }
+
+  static float clampUnitInterval(float value) {
+    if (value < 0.0f) {
+      return 0.0f;
+    }
+    if (value > 1.0f) {
+      return 1.0f;
     }
     return value;
   }

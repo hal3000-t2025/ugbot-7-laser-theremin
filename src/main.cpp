@@ -8,6 +8,7 @@
 #include "control/calibration_store.h"
 #include "control/generated_scores.h"
 #include "control/hand_mapper.h"
+#include "control/pitch_snapper.h"
 #include "control/score_player.h"
 #include "control/smoothing.h"
 #include "display/oled_status_display.h"
@@ -17,7 +18,9 @@ AudioEngine audio_engine;
 TofSensor pitch_sensor(board_profile::kPitchSensorXshut);
 TofSensor volume_sensor(board_profile::kVolumeSensorXshut);
 HandMapper hand_mapper;
+PitchSnapper pitch_snapper;
 ExponentialSmoother pitch_distance_smoother(app_config::kDistanceEmaAlpha);
+ExponentialSmoother pitch_note_smoother(app_config::kDefaultPitchSnapSmoothingAlpha);
 ExponentialSmoother volume_distance_smoother(app_config::kDistanceEmaAlpha);
 String serial_command;
 CalibrationSettings calibration_settings;
@@ -61,6 +64,19 @@ constexpr uint32_t kAudioTaskStackSize = 4096;
 constexpr UBaseType_t kAudioTaskPriority = 2;
 constexpr unsigned long kPresetButtonDebounceMs = 30;
 constexpr float kVolumeReleaseAlpha = 0.65f;
+
+struct PitchSnapTelemetry {
+  float raw_note = 0.0f;
+  float snapped_note = 0.0f;
+  float mixed_note = 0.0f;
+  float smoothed_note = 0.0f;
+  float strength = 0.0f;
+  float output_frequency_hz = app_config::kPitchMinFrequencyHz;
+  bool valid = false;
+};
+
+PitchSnapTelemetry pitch_snap_telemetry;
+bool pitch_snap_debug_enabled = false;
 
 struct PresetSlot {
   const char* name;
@@ -114,10 +130,62 @@ bool startAudioTask() {
 #endif
 }
 
+float pitchMinMidiNote() {
+  return PitchSnapper::frequencyToMidiNote(app_config::kPitchMinFrequencyHz);
+}
+
+float pitchMaxMidiNote() {
+  return PitchSnapper::frequencyToMidiNote(app_config::kPitchMaxFrequencyHz);
+}
+
+PitchSnapConfig currentPitchSnapConfig() {
+  PitchSnapConfig config = {};
+  config.snap_width_semitones = calibration_settings.pitch_snap_width_semitones;
+  config.max_snap_strength = calibration_settings.pitch_snap_max_strength;
+  config.scale_type = calibration_settings.pitch_snap_scale;
+  config.root_pitch_class = calibration_settings.pitch_snap_root;
+  return config;
+}
+
+void clearPitchSnapTelemetry() {
+  pitch_snap_telemetry = PitchSnapTelemetry{};
+}
+
+float applyPitchSnapFromDistance(float distance_mm) {
+  const float raw_note = hand_mapper.pitchNoteFromDistanceMm(
+      static_cast<uint16_t>(distance_mm),
+      calibration_settings.pitch_near_mm,
+      calibration_settings.pitch_far_mm,
+      calibration_settings.pitch_curve_gamma,
+      pitchMinMidiNote(),
+      pitchMaxMidiNote());
+  const PitchSnapResult snapped = pitch_snapper.snap(raw_note, currentPitchSnapConfig());
+  const float smoothed_note =
+      pitch_note_smoother.updateWithAlpha(snapped.mixed_note, calibration_settings.pitch_snap_smoothing_alpha);
+  pitch_snap_telemetry.raw_note = snapped.raw_note;
+  pitch_snap_telemetry.snapped_note = snapped.snapped_note;
+  pitch_snap_telemetry.mixed_note = snapped.mixed_note;
+  pitch_snap_telemetry.smoothed_note = smoothed_note;
+  pitch_snap_telemetry.strength = snapped.strength;
+  pitch_snap_telemetry.output_frequency_hz = PitchSnapper::midiNoteToFrequency(smoothed_note);
+  pitch_snap_telemetry.valid = true;
+  return pitch_snap_telemetry.output_frequency_hz;
+}
+
+void resyncPitchSnapState() {
+  clearPitchSnapTelemetry();
+  pitch_note_smoother.reset();
+  if (pitch_distance_smoother.initialized()) {
+    applyPitchSnapFromDistance(pitch_distance_smoother.value());
+  }
+}
+
 void applyCalibrationSettings() {
   calibration_settings.clamp();
   pitch_distance_smoother.setAlpha(calibration_settings.pitch_smoothing_alpha);
+  pitch_note_smoother.setAlpha(calibration_settings.pitch_snap_smoothing_alpha);
   volume_distance_smoother.setAlpha(calibration_settings.volume_smoothing_alpha);
+  resyncPitchSnapState();
 }
 
 float clampNormalized(float value) {
@@ -273,6 +341,10 @@ float currentPitchHz() {
     return app_config::kTestToneFrequencyHz;
   }
 
+  if (pitch_note_smoother.initialized()) {
+    return PitchSnapper::midiNoteToFrequency(pitch_note_smoother.value());
+  }
+
   if (!pitch_sensor.hasValidReading() && !pitch_distance_smoother.initialized()) {
     return app_config::kPitchMinFrequencyHz;
   }
@@ -280,13 +352,7 @@ float currentPitchHz() {
   const float smoothed_distance = pitch_distance_smoother.initialized()
                                       ? pitch_distance_smoother.value()
                                       : static_cast<float>(pitch_sensor.lastDistanceMm());
-  return hand_mapper.pitchFromDistanceMm(
-      static_cast<uint16_t>(smoothed_distance),
-      calibration_settings.pitch_near_mm,
-      calibration_settings.pitch_far_mm,
-      calibration_settings.pitch_curve_gamma,
-      app_config::kPitchMinFrequencyHz,
-      app_config::kPitchMaxFrequencyHz);
+  return applyPitchSnapFromDistance(smoothed_distance);
 }
 
 float currentVolumeLevel() {
@@ -442,6 +508,7 @@ void applyAudioOutputState() {
     return;
   }
 
+  audio_engine.setFrequency(currentPitchHz());
   audio_engine.setVolume(currentVolumeLevel());
 }
 
@@ -455,8 +522,12 @@ void printSerialCommandHelp() {
   Serial.println("  cal volume near | cal volume far");
   Serial.println("  set pitch near <mm> | set pitch far <mm>");
   Serial.println("  set volume near <mm> | set volume far <mm>");
-  Serial.println("  set smooth pitch <0.01-1.0> | set smooth volume <0.01-1.0>");
+  Serial.println("  set smooth pitch <0.01-1.0> | set filter pitch <0.01-1.0>");
+  Serial.println("  set smooth volume <0.01-1.0> | set snap smooth <0.01-1.0>");
   Serial.println("  set curve pitch <0.30-2.50>");
+  Serial.println("  set snap width <0.05-1.50> | set snap strength <0.00-1.00>");
+  Serial.println("  set snap scale <chromatic|major|minor|pmajor|pminor>");
+  Serial.println("  set snap root <C..B | 0..11> | snap debug on|off");
   Serial.println("  set gate volume <0.00-0.80>");
   Serial.println("  set max volume <0.05-0.25>");
   Serial.println("  save | load | defaults");
@@ -464,7 +535,7 @@ void printSerialCommandHelp() {
 
 void printCalibrationSettings() {
   Serial.printf(
-      "cal pitch near=%u far=%u smooth=%.2f curve=%.2f | volume near=%u far=%u smooth=%.2f gate=%.2f max=%.2f\n",
+      "cal pitch near=%u far=%u filter=%.2f curve=%.2f | volume near=%u far=%u smooth=%.2f gate=%.2f max=%.2f\n",
       calibration_settings.pitch_near_mm,
       calibration_settings.pitch_far_mm,
       calibration_settings.pitch_smoothing_alpha,
@@ -474,6 +545,13 @@ void printCalibrationSettings() {
       calibration_settings.volume_smoothing_alpha,
       calibration_settings.volume_silence_gate,
       calibration_settings.max_output_volume);
+  Serial.printf(
+      "snap scale=%s root=%s width=%.2f strength=%.2f smooth=%.2f\n",
+      PitchSnapper::scaleTypeName(calibration_settings.pitch_snap_scale),
+      PitchSnapper::pitchClassName(calibration_settings.pitch_snap_root),
+      calibration_settings.pitch_snap_width_semitones,
+      calibration_settings.pitch_snap_max_strength,
+      calibration_settings.pitch_snap_smoothing_alpha);
 }
 
 void printAudioStatus() {
@@ -503,6 +581,16 @@ void printAudioStatus() {
         static_cast<unsigned>(score_player.score()->event_count),
         score_player.isRest() ? "yes" : "no",
         score_player.playbackRate());
+  }
+  if (pitch_snap_debug_enabled && pitch_snap_telemetry.valid) {
+    Serial.printf(
+        "snap raw=%.2f snapped=%.2f mixed=%.2f smooth=%.2f strength=%.2f out=%.1fHz\n",
+        pitch_snap_telemetry.raw_note,
+        pitch_snap_telemetry.snapped_note,
+        pitch_snap_telemetry.mixed_note,
+        pitch_snap_telemetry.smoothed_note,
+        pitch_snap_telemetry.strength,
+        pitch_snap_telemetry.output_frequency_hz);
   }
 }
 
@@ -684,6 +772,155 @@ bool applySetMaxVolumeCommand(float value) {
   return true;
 }
 
+bool parsePitchScaleType(const String& value, PitchScaleType& scale_type) {
+  if (value == "chromatic") {
+    scale_type = PitchScaleType::kChromatic;
+    return true;
+  }
+  if (value == "major") {
+    scale_type = PitchScaleType::kMajor;
+    return true;
+  }
+  if (value == "minor") {
+    scale_type = PitchScaleType::kMinor;
+    return true;
+  }
+  if (value == "pmajor" || value == "pentatonicmajor" || value == "pentatonic-major") {
+    scale_type = PitchScaleType::kPentatonicMajor;
+    return true;
+  }
+  if (value == "pminor" || value == "pentatonicminor" || value == "pentatonic-minor") {
+    scale_type = PitchScaleType::kPentatonicMinor;
+    return true;
+  }
+
+  return false;
+}
+
+bool parsePitchRoot(const String& value, uint8_t& root_pitch_class) {
+  bool numeric = !value.isEmpty();
+  for (size_t i = 0; i < value.length(); ++i) {
+    if (!isDigit(value[i])) {
+      numeric = false;
+      break;
+    }
+  }
+
+  if (numeric) {
+    const int numeric_root = value.toInt();
+    if (numeric_root >= 0 && numeric_root <= 11) {
+      root_pitch_class = static_cast<uint8_t>(numeric_root);
+      return true;
+    }
+  }
+
+  if (value == "c") {
+    root_pitch_class = 0;
+    return true;
+  }
+  if (value == "c#" || value == "db") {
+    root_pitch_class = 1;
+    return true;
+  }
+  if (value == "d") {
+    root_pitch_class = 2;
+    return true;
+  }
+  if (value == "d#" || value == "eb") {
+    root_pitch_class = 3;
+    return true;
+  }
+  if (value == "e") {
+    root_pitch_class = 4;
+    return true;
+  }
+  if (value == "f") {
+    root_pitch_class = 5;
+    return true;
+  }
+  if (value == "f#" || value == "gb") {
+    root_pitch_class = 6;
+    return true;
+  }
+  if (value == "g") {
+    root_pitch_class = 7;
+    return true;
+  }
+  if (value == "g#" || value == "ab") {
+    root_pitch_class = 8;
+    return true;
+  }
+  if (value == "a") {
+    root_pitch_class = 9;
+    return true;
+  }
+  if (value == "a#" || value == "bb") {
+    root_pitch_class = 10;
+    return true;
+  }
+  if (value == "b") {
+    root_pitch_class = 11;
+    return true;
+  }
+
+  return false;
+}
+
+bool applySetPitchSnapWidthCommand(float value) {
+  resetCalibrationCapture();
+  calibration_settings.pitch_snap_width_semitones = value;
+  applyCalibrationSettings();
+  applyAudioOutputState();
+  printCalibrationSettings();
+  return true;
+}
+
+bool applySetPitchSnapStrengthCommand(float value) {
+  resetCalibrationCapture();
+  calibration_settings.pitch_snap_max_strength = value;
+  applyCalibrationSettings();
+  applyAudioOutputState();
+  printCalibrationSettings();
+  return true;
+}
+
+bool applySetPitchSnapSmoothingCommand(float value) {
+  resetCalibrationCapture();
+  calibration_settings.pitch_snap_smoothing_alpha = value;
+  applyCalibrationSettings();
+  applyAudioOutputState();
+  printCalibrationSettings();
+  return true;
+}
+
+bool applySetPitchSnapScaleCommand(const String& value) {
+  PitchScaleType scale_type = PitchScaleType::kMajor;
+  if (!parsePitchScaleType(value, scale_type)) {
+    return false;
+  }
+
+  resetCalibrationCapture();
+  calibration_settings.pitch_snap_scale = scale_type;
+  applyCalibrationSettings();
+  applyAudioOutputState();
+  printCalibrationSettings();
+  return true;
+}
+
+bool applySetPitchSnapRootCommand(const String& value) {
+  uint8_t root_pitch_class = 0;
+  if (!parsePitchRoot(value, root_pitch_class)) {
+    return false;
+  }
+
+  resetCalibrationCapture();
+  calibration_settings.pitch_snap_root = root_pitch_class;
+  applyCalibrationSettings();
+  applyAudioOutputState();
+  printCalibrationSettings();
+  return true;
+}
+
 void handleSerialCommand(const String& input) {
   String command = input;
   command.trim();
@@ -766,6 +1003,18 @@ void handleSerialCommand(const String& input) {
   if (command == "stream off") {
     serial_stream_enabled = false;
     Serial.println("Status stream disabled.");
+    return;
+  }
+
+  if (command == "snap debug on") {
+    pitch_snap_debug_enabled = true;
+    Serial.println("Pitch snap debug enabled.");
+    return;
+  }
+
+  if (command == "snap debug off") {
+    pitch_snap_debug_enabled = false;
+    Serial.println("Pitch snap debug disabled.");
     return;
   }
 
@@ -884,6 +1133,20 @@ void handleSerialCommand(const String& input) {
     return;
   }
 
+  if (sscanf(command.c_str(), "set filter pitch %f", &smoothing_value) == 1) {
+    if (!applySetSmoothingCommand("pitch", smoothing_value)) {
+      Serial.println("Invalid pitch filter value.");
+    }
+    return;
+  }
+
+  if (sscanf(command.c_str(), "set snap smooth %f", &smoothing_value) == 1) {
+    if (!applySetPitchSnapSmoothingCommand(smoothing_value)) {
+      Serial.println("Invalid pitch snap smoothing value.");
+    }
+    return;
+  }
+
   float curve_value = 0.0f;
   if (sscanf(command.c_str(), "set curve pitch %f", &curve_value) == 1) {
     if (!applySetPitchCurveCommand(curve_value)) {
@@ -904,6 +1167,37 @@ void handleSerialCommand(const String& input) {
   if (sscanf(command.c_str(), "set max volume %f", &max_volume_value) == 1) {
     if (!applySetMaxVolumeCommand(max_volume_value)) {
       Serial.println("Invalid max volume value.");
+    }
+    return;
+  }
+
+  float snap_value = 0.0f;
+  if (sscanf(command.c_str(), "set snap width %f", &snap_value) == 1) {
+    if (!applySetPitchSnapWidthCommand(snap_value)) {
+      Serial.println("Invalid snap width value.");
+    }
+    return;
+  }
+
+  if (sscanf(command.c_str(), "set snap strength %f", &snap_value) == 1) {
+    if (!applySetPitchSnapStrengthCommand(snap_value)) {
+      Serial.println("Invalid snap strength value.");
+    }
+    return;
+  }
+
+  if (command.startsWith("set snap scale ")) {
+    const String value = command.substring(String("set snap scale ").length());
+    if (!applySetPitchSnapScaleCommand(value)) {
+      Serial.println("Invalid snap scale value.");
+    }
+    return;
+  }
+
+  if (command.startsWith("set snap root ")) {
+    const String value = command.substring(String("set snap root ").length());
+    if (!applySetPitchSnapRootCommand(value)) {
+      Serial.println("Invalid snap root value.");
     }
     return;
   }
@@ -1057,7 +1351,9 @@ void loop() {
     if (pitch_sensor.isOnline() && pitch_sensor.update()) {
       const uint16_t pitch_distance_mm = pitch_sensor.lastDistanceMm();
       if (pitch_distance_mm <= calibration_settings.pitch_far_mm) {
-        pitch_distance_smoother.update(static_cast<float>(pitch_distance_mm));
+        const float filtered_pitch_distance =
+            pitch_distance_smoother.update(static_cast<float>(pitch_distance_mm));
+        applyPitchSnapFromDistance(filtered_pitch_distance);
         if (!diagnostic_tone_enabled && !score_player.isActive()) {
           audio_engine.setFrequency(currentPitchHz());
         }
@@ -1126,6 +1422,25 @@ void loop() {
           pitch_sensor.lastDistanceMm(),
           pitch_distance,
           score_player.playbackRate(),
+          currentOutputPitchHz(),
+          volume_sensor.lastDistanceMm(),
+          volume_distance,
+          currentOutputVolumeLevel());
+      return;
+    }
+
+    if (pitch_snap_debug_enabled && pitch_snap_telemetry.valid) {
+      Serial.printf(
+          "wave=%s preset=%s | muted=%s | pitch_in=%u mm smoothed=%.1f raw=%.2f snap=%.2f mix=%.2f str=%.2f => %.1f Hz | volume_in=%u mm smoothed=%.1f => %.2f\n",
+          AudioEngine::waveformName(audio_engine.waveform()),
+          currentPreset().name,
+          audio_muted ? "yes" : "no",
+          pitch_sensor.lastDistanceMm(),
+          pitch_distance,
+          pitch_snap_telemetry.raw_note,
+          pitch_snap_telemetry.snapped_note,
+          pitch_snap_telemetry.mixed_note,
+          pitch_snap_telemetry.strength,
           currentOutputPitchHz(),
           volume_sensor.lastDistanceMm(),
           volume_distance,
