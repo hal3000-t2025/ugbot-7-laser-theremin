@@ -18,13 +18,14 @@ class ScoreSpec:
     waveform: str
     loop: bool
     display_name: str = ""
+    transpose_semitones: int = 0
 
 
 def render_score_block(project_dir: Path, spec: ScoreSpec) -> str:
     parsed = parse_abc(project_dir / spec.source)
     display_name = spec.display_name or parsed.title
     event_lines = "\n".join(
-        f"    {{{midi_note}, {duration_ms}}},"
+        f"    {{{midi_note if midi_note < 0 else midi_note + spec.transpose_semitones}, {duration_ms}}},"
         for midi_note, duration_ms in parsed.events
     )
     return f"""constexpr ScoreEvent k{spec.score_name}Events[] = {{
@@ -70,6 +71,7 @@ score_specs = [
         score_id="example2",
         waveform="kWarm",
         loop=True,
+        transpose_semitones=12,
     ),
 ]
 
