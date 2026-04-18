@@ -32,10 +32,15 @@ src/
     generated_scores.h
     hand_mapper.h
     hand_mapper.cpp
+    pitch_snapper.h
+    pitch_snapper.cpp
     score_player.h
     score_player.cpp
     score_types.h
     smoothing.h
+  display/
+    oled_status_display.h
+    oled_status_display.cpp
 scores/
   example.abc
   example2.abc
@@ -156,22 +161,25 @@ pio run
 
 ## 烧录
 
-当前 `ESP32-S3` 实测串口：
+本机最近一次实测 `ESP32-S3` 串口是：
 
-- `/dev/cu.usbserial-A5069RR4`
+- `/dev/cu.usbmodem1101`
+
+但不同电脑、不同 USB 口、不同固件启动方式下，串口名都可能变化。  
+**实际操作时始终先运行 `python3 tools/theremin_tool.py ports`，再把下面命令里的串口替换成你自己看到的那个。**
 
 烧录命令：
 
 ```bash
 . .venv/bin/activate
-pio run -e esp32-s3-devkitc-1 -t upload --upload-port /dev/cu.usbserial-A5069RR4
+pio run -e esp32-s3-devkitc-1 -t upload --upload-port <你的串口>
 ```
 
 ## 串口监视
 
 ```bash
 . .venv/bin/activate
-pio device monitor -b 115200
+pio device monitor -b 115200 --port <你的串口>
 ```
 
 ## 串口工具
@@ -180,10 +188,10 @@ pio device monitor -b 115200
 
 ```bash
 python3 tools/theremin_tool.py ports
-python3 tools/theremin_tool.py --port /dev/cu.usbserial-A5069RR4 send --quiet-stream status
-python3 tools/theremin_tool.py --port /dev/cu.usbserial-A5069RR4 smoke-test
-python3 tools/theremin_tool.py --port /dev/cu.usbserial-A5069RR4 apply-defaults --save
-python3 tools/theremin_tool.py --port /dev/cu.usbserial-A5069RR4 calibrate --save
+python3 tools/theremin_tool.py --port <你的串口> send --quiet-stream status
+python3 tools/theremin_tool.py --port <你的串口> smoke-test
+python3 tools/theremin_tool.py --port <你的串口> apply-defaults --save
+python3 tools/theremin_tool.py --port <你的串口> calibrate --save
 ```
 
 用途：
@@ -245,8 +253,16 @@ Audio output default: low volume
 - `set volume near <mm>`
 - `set volume far <mm>`
 - `set smooth pitch <0.01-1.0>`
+- `set filter pitch <0.01-1.0>`
 - `set smooth volume <0.01-1.0>`
+- `set snap smooth <0.01-1.0>`
 - `set curve pitch <0.30-2.50>`
+- `set snap width <0.05-1.50>`
+- `set snap strength <0.00-1.00>`
+- `set snap scale <chromatic|major|minor|pmajor|pminor>`
+- `set snap root <C..B | 0..11>`
+- `snap debug on`
+- `snap debug off`
 - `set gate volume <0.00-0.80>`
 - `set max volume <0.05-0.25>`
 - `save`
@@ -259,16 +275,18 @@ Audio output default: low volume
 - `sample` 是基于 [dream_tides_full_mono10k.wav](/Users/houtao/ai/Mcp_Dev/激光特雷门琴/src/audio/dream_tides_full_mono10k.wav) 嵌入固件的整首采样预设，产品语义固定为“按 `pitch` 连续变速的可演奏采样音色”
 - 当前允许后续频繁替换 `sample` 内容，但默认仍通过重新编译和刷机完成，不考虑 `OTA`
 - `example` 当前重新绑定为乐谱自动播放预设，ABC 来源仍是 [scores/example.abc](/Users/houtao/ai/Mcp_Dev/激光特雷门琴/scores/example.abc)
-- `example2` 当前绑定为《天空之城》主旋律预设，ABC 来源是 [scores/example2.abc](/Users/houtao/ai/Mcp_Dev/激光特雷门琴/scores/example2.abc)
-- 当前曲目已改为《Lonely People Are Shameful / 孤独的人是可耻的》，底层绑定第 `4` 个音色 `warm`
+- `example2` 当前绑定为《天空之城》主旋律预设，ABC 来源是 [scores/example2.abc](/Users/houtao/ai/Mcp_Dev/激光特雷门琴/scores/example2.abc)，并已整体升高 `1` 个八度
+- 当前两首自动播放预设都绑定第 `4` 个音色 `warm`
 - 在自动播放预设里，当前控制映射改为：
   - `pitch` 传感器控制播放速度
   - `volume` 传感器继续控制音量
   - 不遮挡 `pitch` 传感器时为默认 `1.00x`
   - 手靠近 `pitch` 传感器时保持较慢
   - 手离远时会逐步加速到 `3.00x`
+  - 如果手没有进入 `volume` 检测区，自动播放也会保持静音
 - 当前内置 sample 已把素材幅度补偿到接近普通合成音色的量级，靠近 `volume` 传感器时会更容易推到足够高的响度
 - `tools/abc_to_score.py` 可把简化子集 `ABC` 转成 [generated_scores.h](/Users/houtao/ai/Mcp_Dev/激光特雷门琴/src/control/generated_scores.h)
+- `scripts/generate_scores.py` 当前会一次生成 `example` 和 `example2` 两首乐谱定义
 - `next` 和 `preset <1-10>` 走的是和硬件按钮同一套预设切换逻辑
 - 当前默认音高跨度已经从 `2` 个八度扩到 `3` 个八度：`220Hz - 1760Hz`
 - `pitch` 映射现在已进入第一版弧线化：
@@ -278,12 +296,17 @@ Audio output default: low volume
   - 当前方向是：离 `pitch` 传感器越近音越低，离远音越高
   - `curve < 1.0` 会扩展远端高音区
   - `curve > 1.0` 会扩展靠近传感器的低音区
+- `pitch` 还接入了可保存的软吸附音高控制：
+  - 默认支持 `chromatic / major / minor / pmajor / pminor`
+  - 默认可调参数包括 `snap width / snap strength / snap smooth / snap root / snap scale`
+  - 当前方向是：发音连续，靠近目标调内音时更容易“被轻轻拉住”
 - `cal ...` 会进入“保持手势稳定”的采样模式，抓取 8 帧后自动写入平均值
 - 如果希望完全手动控制，也可以继续使用 `set ... <mm>`
 - `stream off` 可临时关闭自动状态刷屏，`stream on` 可恢复
 - `set gate volume` 用来控制“手靠近到多近才开始出声”
 - `set max volume` 用来放大或压低演奏最大音量，并且可通过 `save` 持久化
 - 如果 `status` 里出现 `score=<name> event=<n>/<total> rest=<yes|no> rate=<x.xx>x`，说明当前预设正处于自动播放模式
+- 如果 `status` 里额外出现 `snap scale=... root=... width=... strength=... smooth=...`，说明软吸附参数已经加载
 - 自动状态刷屏在 `score` 模式下会显示真实控制关系：
   - `pitch_in ... => rate=...`
   - `out=... Hz`

@@ -20,7 +20,7 @@ from typing import Iterable, List
 
 
 DEFAULT_BAUD = 115200
-DEFAULT_PORT = "/dev/cu.usbserial-A5069RR4"
+DEFAULT_PORT = "/dev/cu.usbmodem1101"
 DEFAULT_CAPTURE_TIMEOUT = 5.0
 DEFAULT_READ_WINDOW = 1.0
 

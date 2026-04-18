@@ -56,7 +56,7 @@
 ## 乐谱 / 自动播放路线
 
 - [x] 支持“预设乐曲自动播放”模式
-  - 已增加 `8 twinkle` 自动播放槽位
+  - 已增加自动播放槽位，当前为 `9 example` 和 `10 example2`
   - 切到对应预设后自动开始播
 - [x] 引入 `ABC` 记谱法作为乐曲输入格式
 - [x] 明确第一版只支持 `ABC` 的简化子集：
@@ -117,14 +117,14 @@
   - 再执行 `pio run -e esp32-s3-devkitc-1 -t upload`
   - 烧录后查看串口日志，确认是否出现 `OLED ready on shared I2C address 0x3C.`
 - [ ] 硬件测试要求
-  - 开机后屏幕顶部应显示当前预设，例如 `4/8 warm`
+  - 开机后屏幕顶部应显示当前预设，例如 `4/10 warm`
   - 第二条图显示 `PIT` 或 `SPD`
   - 第三条图显示 `VOL`
   - 普通演奏 / `sample` 模式下：
     - 挥动 `pitch` 手时，`PIT` 条应变化
     - 挥动 `volume` 手时，`VOL` 条应变化
-  - `twinkle` 自动播放模式下：
-    - 顶部应显示 `8/8 twinkle`
+  - `example / example2` 自动播放模式下：
+    - 顶部应显示 `9/10 example` 或 `10/10 example2`
     - 第一条应从 `PIT` 切换成 `SPD`
     - 遮挡 `pitch` 传感器时，`SPD` 条应上升
     - 遮挡 `volume` 传感器时，`VOL` 条应上升
