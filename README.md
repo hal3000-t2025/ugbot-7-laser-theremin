@@ -38,6 +38,7 @@ src/
     smoothing.h
 scores/
   example.abc
+  example2.abc
 tools/
   abc_to_score.py
   theremin_tool.py
@@ -151,7 +152,7 @@ pio run
 说明：
 
 - 每次 `pio run` / `pio upload` 前，都会自动执行 `scripts/generate_scores.py`
-- 当前会把 [scores/example.abc](/Users/houtao/ai/Mcp_Dev/激光特雷门琴/scores/example.abc) 转成 [generated_scores.h](/Users/houtao/ai/Mcp_Dev/激光特雷门琴/src/control/generated_scores.h)
+- 当前会把 [scores/example.abc](/Users/houtao/ai/Mcp_Dev/激光特雷门琴/scores/example.abc) 和 [scores/example2.abc](/Users/houtao/ai/Mcp_Dev/激光特雷门琴/scores/example2.abc) 一起转成 [generated_scores.h](/Users/houtao/ai/Mcp_Dev/激光特雷门琴/src/control/generated_scores.h)
 
 ## 烧录
 
@@ -189,7 +190,7 @@ python3 tools/theremin_tool.py --port /dev/cu.usbserial-A5069RR4 calibrate --sav
 
 - `ports`：列出当前可用串口
 - `send`：发送一条或多条串口命令
-- `smoke-test`：自动切换 8 个音色/预设并回读 `status`
+- `smoke-test`：自动切换 10 个音色/预设并回读 `status`
 - `apply-defaults --save`：恢复推荐默认值并保存
 - `calibrate --save`：按提示完成 4 步正式校准并保存
 
@@ -258,6 +259,7 @@ Audio output default: low volume
 - `sample` 是基于 [dream_tides_full_mono10k.wav](/Users/houtao/ai/Mcp_Dev/激光特雷门琴/src/audio/dream_tides_full_mono10k.wav) 嵌入固件的整首采样预设，产品语义固定为“按 `pitch` 连续变速的可演奏采样音色”
 - 当前允许后续频繁替换 `sample` 内容，但默认仍通过重新编译和刷机完成，不考虑 `OTA`
 - `example` 当前重新绑定为乐谱自动播放预设，ABC 来源仍是 [scores/example.abc](/Users/houtao/ai/Mcp_Dev/激光特雷门琴/scores/example.abc)
+- `example2` 当前绑定为《天空之城》主旋律预设，ABC 来源是 [scores/example2.abc](/Users/houtao/ai/Mcp_Dev/激光特雷门琴/scores/example2.abc)
 - 当前曲目已改为《Lonely People Are Shameful / 孤独的人是可耻的》，底层绑定第 `4` 个音色 `warm`
 - 在自动播放预设里，当前控制映射改为：
   - `pitch` 传感器控制播放速度

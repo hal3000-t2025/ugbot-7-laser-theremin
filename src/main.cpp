@@ -95,7 +95,7 @@ constexpr PresetSlot kPresetSlots[] = {
     {"sample", Waveform::kSample, nullptr, "Waveform set to embedded sample loop."},
     {"sample2", Waveform::kSample, nullptr, "Waveform set to embedded sample loop."},
     {"example", Waveform::kWarm, &generated_scores::kExampleScore, "Preset set to example score."},
-    {"example2", Waveform::kWarm, &generated_scores::kExampleScore, "Preset set to example score."},
+    {"example2", Waveform::kWarm, &generated_scores::kExample2Score, "Preset set to example2 score."},
 };
 
 constexpr size_t kPresetSlotCount = sizeof(kPresetSlots) / sizeof(kPresetSlots[0]);
