@@ -11,6 +11,7 @@ enum class Waveform {
   kHollow,
   kBright,
   kSample,
+  kSample2,
 };
 
 class AudioEngine {
@@ -29,8 +30,8 @@ class AudioEngine {
   void fillBuffer();
   static float renderWaveformSample(Waveform waveform, float phase, float sample_position);
   static float sampleWavetable(Waveform waveform, float phase);
-  static float sampleEmbeddedLoop(float sample_position);
-  static float samplePositionStep(float frequency_hz);
+  static float sampleEmbeddedLoop(Waveform waveform, float sample_position);
+  static float samplePositionStep(Waveform waveform, float frequency_hz);
 
   float frequency_hz_ = 440.0f;
   float volume_ = 0.18f;

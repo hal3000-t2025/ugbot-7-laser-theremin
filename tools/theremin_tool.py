@@ -20,7 +20,6 @@ from typing import Iterable, List
 
 
 DEFAULT_BAUD = 115200
-DEFAULT_PORT = "/dev/cu.usbmodem1101"
 DEFAULT_CAPTURE_TIMEOUT = 5.0
 DEFAULT_READ_WINDOW = 1.0
 
@@ -115,6 +114,18 @@ class SerialConnection:
         return DeviceResponse(lines)
 
 
+def resolve_port(port: str | None) -> str:
+    if port:
+        return port
+
+    ports = list_serial_ports()
+    if len(ports) == 1:
+        return ports[0]
+    if not ports:
+        raise SystemExit("未发现串口设备，请先连接开发板或显式传入 --port。")
+    raise SystemExit("检测到多个串口设备，请显式传入 --port。")
+
+
 def ensure_port_exists(port: str) -> None:
     if not os.path.exists(port):
         raise SystemExit(f"串口不存在: {port}")
@@ -136,9 +147,10 @@ def cmd_ports(_: argparse.Namespace) -> int:
 
 
 def cmd_send(args: argparse.Namespace) -> int:
-    ensure_port_exists(args.port)
-    print_header(args.port)
-    with SerialConnection(args.port) as device:
+    port = resolve_port(args.port)
+    ensure_port_exists(port)
+    print_header(port)
+    with SerialConnection(port) as device:
         if args.quiet_stream:
             device.write_line("stream off")
             device.read_lines(0.4).print()
@@ -154,17 +166,19 @@ def cmd_send(args: argparse.Namespace) -> int:
 
 
 def cmd_monitor(args: argparse.Namespace) -> int:
-    ensure_port_exists(args.port)
-    print_header(args.port)
-    with SerialConnection(args.port) as device:
+    port = resolve_port(args.port)
+    ensure_port_exists(port)
+    print_header(port)
+    with SerialConnection(port) as device:
         response = device.read_lines(args.duration)
         response.print()
     return 0
 
 
 def cmd_smoke_test(args: argparse.Namespace) -> int:
-    ensure_port_exists(args.port)
-    print_header(args.port)
+    port = resolve_port(args.port)
+    ensure_port_exists(port)
+    print_header(port)
     commands = [
         "status",
         "warm",
@@ -181,10 +195,12 @@ def cmd_smoke_test(args: argparse.Namespace) -> int:
         "status",
         "example2",
         "status",
+        "example3",
+        "status",
         "sine",
         "status",
     ]
-    with SerialConnection(args.port) as device:
+    with SerialConnection(port) as device:
         device.write_line("stream off")
         device.read_lines(0.4).print()
         for command in commands:
@@ -204,14 +220,15 @@ def wait_for_capture(device: SerialConnection, expected_text: str, timeout: floa
 
 
 def cmd_defaults(args: argparse.Namespace) -> int:
-    ensure_port_exists(args.port)
-    print_header(args.port)
+    port = resolve_port(args.port)
+    ensure_port_exists(port)
+    print_header(port)
     commands = ["defaults", "set volume far 500"]
     if args.save:
         commands.append("save")
     commands.append("status")
 
-    with SerialConnection(args.port) as device:
+    with SerialConnection(port) as device:
         device.write_line("stream off")
         device.read_lines(0.4).print()
         for command in commands:
@@ -229,8 +246,9 @@ def prompt_user(message: str) -> None:
 
 
 def cmd_calibrate(args: argparse.Namespace) -> int:
-    ensure_port_exists(args.port)
-    print_header(args.port)
+    port = resolve_port(args.port)
+    ensure_port_exists(port)
+    print_header(port)
 
     steps = [
         ("pitch near", "把手放到 pitch 最近位置"),
@@ -239,7 +257,7 @@ def cmd_calibrate(args: argparse.Namespace) -> int:
         ("volume far", "把手移开到 volume 最远位置"),
     ]
 
-    with SerialConnection(args.port) as device:
+    with SerialConnection(port) as device:
         device.write_line("stream off")
         device.read_lines(0.4).print()
         print("先读一次当前状态：")
@@ -272,7 +290,7 @@ def cmd_calibrate(args: argparse.Namespace) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="激光特雷门琴串口辅助工具")
-    parser.add_argument("--port", default=DEFAULT_PORT, help=f"串口设备，默认 {DEFAULT_PORT}")
+    parser.add_argument("--port", default=None, help="串口设备；省略时会在仅检测到一个串口时自动使用")
 
     subparsers = parser.add_subparsers(dest="command", required=True)
 

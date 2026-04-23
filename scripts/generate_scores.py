@@ -1,13 +1,24 @@
-Import("env")
-
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-project_dir = Path(env.subst("$PROJECT_DIR"))
+try:
+    Import("env")  # type: ignore[name-defined]
+except NameError:
+    env = None
+
+
+def resolve_project_dir() -> Path:
+    if env is not None:
+        return Path(env.subst("$PROJECT_DIR"))
+    return Path(__file__).resolve().parents[1]
+
+
+project_dir = resolve_project_dir()
 sys.path.insert(0, str(project_dir / "tools"))
 
 from abc_to_score import parse_abc  # type: ignore
+from score_preview import render_score_preview  # type: ignore
 
 
 @dataclass
@@ -19,6 +30,8 @@ class ScoreSpec:
     loop: bool
     display_name: str = ""
     transpose_semitones: int = 0
+    volume_scale: float = 1.0
+    preview_loops: int = 1
 
 
 def render_score_block(project_dir: Path, spec: ScoreSpec) -> str:
@@ -39,9 +52,32 @@ constexpr ScoreDefinition k{spec.score_name}Score = {{
     k{spec.score_name}Events,
     sizeof(k{spec.score_name}Events) / sizeof(k{spec.score_name}Events[0]),
     {"true" if spec.loop else "false"},
-    1.00f,
+    {spec.volume_scale:.2f}f,
 }};
 """
+
+
+def render_preview_assets(project_dir: Path, specs: list[ScoreSpec]) -> list[Path]:
+    preview_dir = project_dir / "generated_audio"
+    outputs: list[Path] = []
+    for spec in specs:
+        parsed = parse_abc(project_dir / spec.source)
+        preview_path = preview_dir / f"{spec.score_id}.wav"
+        result = render_score_preview(
+            project_dir,
+            preview_path,
+            parsed.events,
+            spec.waveform,
+            transpose_semitones=spec.transpose_semitones,
+            volume_scale=spec.volume_scale,
+            loops=spec.preview_loops,
+        )
+        outputs.append(result.output_path)
+        print(
+            f"generated preview {result.output_path} "
+            f"({result.duration_seconds:.2f}s, {result.frame_count} frames)"
+        )
+    return outputs
 
 
 def render_header(project_dir: Path, specs: list[ScoreSpec]) -> str:
@@ -73,8 +109,19 @@ score_specs = [
         loop=True,
         transpose_semitones=12,
     ),
+    ScoreSpec(
+        source="scores/example3.abc",
+        score_name="Example3",
+        score_id="example3",
+        waveform="kWarm",
+        loop=True,
+    ),
 ]
 
 output_path = project_dir / "src" / "control" / "generated_scores.h"
 output_path.write_text(render_header(project_dir, score_specs), encoding="utf-8")
-print(f"generated {output_path} with {len(score_specs)} scores")
+preview_outputs = render_preview_assets(project_dir, score_specs)
+print(
+    f"generated {output_path} with {len(score_specs)} scores "
+    f"and {len(preview_outputs)} preview wav files"
+)

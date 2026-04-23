@@ -14,6 +14,8 @@ constexpr float kPi = 3.14159265358979323846f;
 constexpr float kEmbeddedSampleRateHz = 10000.0f;
 constexpr float kEmbeddedSampleBaseFrequencyHz = 302.61f;
 constexpr float kEmbeddedSampleGain = 1.65f;
+constexpr float kEmbeddedSample2BaseFrequencyHz = 130.81f;
+constexpr float kEmbeddedSample2Gain = 4.00f;
 
 struct StereoFrame {
   int16_t left;
@@ -22,6 +24,13 @@ struct StereoFrame {
 
 struct Wavetable {
   float samples[app_config::kWavetableSize];
+};
+
+struct EmbeddedSampleBank {
+  const int16_t* data;
+  size_t sample_count;
+  float base_frequency_hz;
+  float gain;
 };
 
 StereoFrame sample_buffer[app_config::kAudioFramesPerChunk];
@@ -36,6 +45,8 @@ constexpr float kBrightHarmonics[] = {1.00f, 0.72f, 0.55f, 0.42f, 0.32f, 0.24f, 
 
 extern const uint8_t embedded_sample_start[] asm("_binary_assets_audio_samples_dream_tides_full_mono10k_pcm_start");
 extern const uint8_t embedded_sample_end[] asm("_binary_assets_audio_samples_dream_tides_full_mono10k_pcm_end");
+extern const uint8_t embedded_sample2_start[] asm("_binary_assets_audio_samples_voice_ah_mono10k_pcm_start");
+extern const uint8_t embedded_sample2_end[] asm("_binary_assets_audio_samples_voice_ah_mono10k_pcm_end");
 
 template <size_t kCount>
 void fillHarmonicTable(Wavetable& table, const float (&harmonics)[kCount]) {
@@ -87,6 +98,39 @@ const int16_t* embeddedSampleData() {
 
 size_t embeddedSampleCount() {
   return static_cast<size_t>(embedded_sample_end - embedded_sample_start) / sizeof(int16_t);
+}
+
+const int16_t* embeddedSample2Data() {
+  return reinterpret_cast<const int16_t*>(embedded_sample2_start);
+}
+
+size_t embeddedSample2Count() {
+  return static_cast<size_t>(embedded_sample2_end - embedded_sample2_start) /
+         sizeof(int16_t);
+}
+
+bool isEmbeddedSampleWaveform(Waveform waveform) {
+  return waveform == Waveform::kSample || waveform == Waveform::kSample2;
+}
+
+EmbeddedSampleBank embeddedSampleBankFor(Waveform waveform) {
+  switch (waveform) {
+    case Waveform::kSample2:
+      return EmbeddedSampleBank{
+          embeddedSample2Data(),
+          embeddedSample2Count(),
+          kEmbeddedSample2BaseFrequencyHz,
+          kEmbeddedSample2Gain,
+      };
+    case Waveform::kSample:
+    default:
+      return EmbeddedSampleBank{
+          embeddedSampleData(),
+          embeddedSampleCount(),
+          kEmbeddedSampleBaseFrequencyHz,
+          kEmbeddedSampleGain,
+      };
+  }
 }
 
 }  // namespace
@@ -191,6 +235,8 @@ const char* AudioEngine::waveformName(Waveform waveform) {
       return "bright";
     case Waveform::kSample:
       return "sample";
+    case Waveform::kSample2:
+      return "sample2";
   }
 
   return "unknown";
@@ -219,31 +265,32 @@ float AudioEngine::sampleWavetable(Waveform waveform, float phase) {
   return current + (next - current) * fraction;
 }
 
-float AudioEngine::sampleEmbeddedLoop(float sample_position) {
-  const size_t sample_count = embeddedSampleCount();
-  if (sample_count == 0) {
+float AudioEngine::sampleEmbeddedLoop(Waveform waveform, float sample_position) {
+  const EmbeddedSampleBank bank = embeddedSampleBankFor(waveform);
+  if (bank.sample_count == 0) {
     return 0.0f;
   }
 
-  while (sample_position >= static_cast<float>(sample_count)) {
-    sample_position -= static_cast<float>(sample_count);
+  while (sample_position >= static_cast<float>(bank.sample_count)) {
+    sample_position -= static_cast<float>(bank.sample_count);
   }
 
   while (sample_position < 0.0f) {
-    sample_position += static_cast<float>(sample_count);
+    sample_position += static_cast<float>(bank.sample_count);
   }
 
-  const size_t index = static_cast<size_t>(sample_position) % sample_count;
-  const size_t next_index = (index + 1) % sample_count;
+  const size_t index = static_cast<size_t>(sample_position) % bank.sample_count;
+  const size_t next_index = (index + 1) % bank.sample_count;
   const float fraction = sample_position - static_cast<float>(index);
-  const float current = static_cast<float>(embeddedSampleData()[index]) / 32768.0f;
-  const float next = static_cast<float>(embeddedSampleData()[next_index]) / 32768.0f;
-  return (current + (next - current) * fraction) * kEmbeddedSampleGain;
+  const float current = static_cast<float>(bank.data[index]) / 32768.0f;
+  const float next = static_cast<float>(bank.data[next_index]) / 32768.0f;
+  return (current + (next - current) * fraction) * bank.gain;
 }
 
-float AudioEngine::samplePositionStep(float frequency_hz) {
+float AudioEngine::samplePositionStep(Waveform waveform, float frequency_hz) {
+  const EmbeddedSampleBank bank = embeddedSampleBankFor(waveform);
   return (kEmbeddedSampleRateHz / static_cast<float>(app_config::kAudioSampleRate)) *
-         (frequency_hz / kEmbeddedSampleBaseFrequencyHz);
+         (frequency_hz / bank.base_frequency_hz);
 }
 
 float AudioEngine::renderWaveformSample(Waveform waveform, float phase, float sample_position) {
@@ -266,7 +313,8 @@ float AudioEngine::renderWaveformSample(Waveform waveform, float phase, float sa
     case Waveform::kBright:
       return sampleWavetable(waveform, phase);
     case Waveform::kSample:
-      return sampleEmbeddedLoop(sample_position);
+    case Waveform::kSample2:
+      return sampleEmbeddedLoop(waveform, sample_position);
   }
 
   return 0.0f;
@@ -284,7 +332,7 @@ void AudioEngine::fillBuffer() {
   taskEXIT_CRITICAL(&parameter_lock_);
 
   if (target_waveform != waveform_) {
-    if (waveform_ == Waveform::kSample) {
+    if (isEmbeddedSampleWaveform(waveform_)) {
       previous_sample_position_ = sample_position_;
     } else {
       previous_sample_position_ = 0.0f;
@@ -294,14 +342,26 @@ void AudioEngine::fillBuffer() {
     waveform_ = target_waveform;
     waveform_blend_ = 0.0f;
 
-    if (waveform_ == Waveform::kSample) {
+    if (isEmbeddedSampleWaveform(waveform_)) {
       sample_position_ = 0.0f;
     }
   }
 
   const float phase_step = kTwoPi * frequency_hz / static_cast<float>(app_config::kAudioSampleRate);
-  const float sample_step = samplePositionStep(frequency_hz);
-  const float sample_wrap = static_cast<float>(embeddedSampleCount());
+  const float sample_step =
+      isEmbeddedSampleWaveform(waveform_) ? samplePositionStep(waveform_, frequency_hz) : 0.0f;
+  const float previous_sample_step = isEmbeddedSampleWaveform(previous_waveform_)
+                                         ? samplePositionStep(previous_waveform_, frequency_hz)
+                                         : 0.0f;
+  const float current_sample_wrap = isEmbeddedSampleWaveform(waveform_)
+                                        ? static_cast<float>(
+                                              embeddedSampleBankFor(waveform_).sample_count)
+                                        : 0.0f;
+  const float previous_sample_wrap = isEmbeddedSampleWaveform(previous_waveform_)
+                                         ? static_cast<float>(
+                                               embeddedSampleBankFor(previous_waveform_)
+                                                   .sample_count)
+                                         : 0.0f;
   float phase = phase_;
   float sample_position = sample_position_;
   float previous_sample_position = previous_sample_position_;
@@ -331,17 +391,17 @@ void AudioEngine::fillBuffer() {
       phase -= kTwoPi;
     }
 
-    if (waveform_ == Waveform::kSample && sample_wrap > 0.0f) {
+    if (isEmbeddedSampleWaveform(waveform_) && current_sample_wrap > 0.0f) {
       sample_position += sample_step;
-      while (sample_position >= sample_wrap) {
-        sample_position -= sample_wrap;
+      while (sample_position >= current_sample_wrap) {
+        sample_position -= current_sample_wrap;
       }
     }
 
-    if (previous_waveform_ == Waveform::kSample && sample_wrap > 0.0f) {
-      previous_sample_position += sample_step;
-      while (previous_sample_position >= sample_wrap) {
-        previous_sample_position -= sample_wrap;
+    if (isEmbeddedSampleWaveform(previous_waveform_) && previous_sample_wrap > 0.0f) {
+      previous_sample_position += previous_sample_step;
+      while (previous_sample_position >= previous_sample_wrap) {
+        previous_sample_position -= previous_sample_wrap;
       }
     }
   }
