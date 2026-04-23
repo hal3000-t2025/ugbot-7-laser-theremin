@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="src/pic/banner.png" alt="激光特雷门琴横幅" width="100%">
+</p>
+
 # 激光特雷门琴 M5
 
 当前阶段目标：
@@ -50,6 +54,7 @@ src/
     oled_status_display.h
     oled_status_display.cpp
   pic/
+    banner.png
     1.jpg
     2.jpg
     3.jpg
